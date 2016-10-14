@@ -50,6 +50,10 @@ optional arguments:
                         files
   -f, --force           Force deployment even if the service is already
                         affected by a running deployment [default: False]
+  --canary-group CANARYGROUP
+                        Unique name for this group of canaries [default: None]
+  --canary-cleanup      Destroy canaries that are no longer present [default:
+                        False]
 ```
 
 ## Configuration
@@ -349,6 +353,33 @@ override:
   env:
     DATABASE_PASSWORD: "ENC[NACL,NVnSkhxA010D2yOWKRFog0jpUvHQzmkmKKHmqAbHAnz8oGbPEFkDfyKHQHGO7w==]"
 ```
+
+## Canary Deployments
+Lighter together with [Proxymatic](http://github.com/meltwater/proxymatic) supports [canary deployments](http://martinfowler.com/bliki/CanaryRelease.html) using
+the `--canary-group` parameter. This parameter makes Lighter rewrite the app id and servicePort to avoid conflicts and automatically add 
+the metadata labels that Proxymatic use for canaries. The `--canary-cleanup` parameter destroys canary instances when they are removed 
+from configuration. 
+
+### Canaries From Files
+This example use a `*-canary-*` filename convention to separate canaries from normal services. In this workflow 
+you would copy the regular service file `myservice.yml`, and make any tentative changes in this new 
+`myservice-canary-somechange.yml`. When the canary has served its purpose you'd `git mv` back or `git rm` the 
+canary file.
+
+
+```
+# Deploy regular services
+lighter deploy -f -m "http://marathon-host:8080/" $(find . -name \*.yml -not -name globals.yml -not -name \*-canary-\*)
+
+# Deploy and prune canaries
+lighter deploy -f -m "http://marathon-host:8080/" --canary-group=generic --canary-cleanup $(find . -name \*-canary-\*.yml)
+```
+
+### Canaries From Pull Requests
+This usage would run `lighter -t /some/output/dir verify ...` on a PR and again on its base revision. Then `diff -r` the 
+rendered json files to figure out what services were modifed in the PR. The modified services would be deployed as canaries
+with `lighter deploy --canary-group=mybranchname --canary-cleanup ...` whenever the PR branch is changed. When the PR is closed
+or merged the canaries would be destroyed using `lighter deploy --canary-group=mybranchname --canary-cleanup`
 
 ## Installation
 Place a `lighter` script in the root of your configuration repo. Replace the LIGHTER_VERSION with
