@@ -381,6 +381,10 @@ rendered json files to figure out what services were modifed in the PR. The modi
 with `lighter deploy --canary-group=mybranchname --canary-cleanup ...` whenever the PR branch is changed. When the PR is closed
 or merged the canaries would be destroyed using `lighter deploy --canary-group=mybranchname --canary-cleanup`
 
+### Canary Metrics
+Lighter adds a [Docker label](https://docs.docker.com/engine/userguide/labels-custom-metadata/) `com.meltwater.lighter.canary.group`
+which can be used to separate out container metrics from the canaries. 
+
 ## Installation
 Place a `lighter` script in the root of your configuration repo. Replace the LIGHTER_VERSION with
 a version from the [releases page](https://github.com/meltwater/lighter/releases).
@@ -446,7 +450,11 @@ override:
 ```
 
 ### Datadog
-To send [Datadog deployment events](http://docs.datadoghq.com/guides/overview/#events) supply your [Datadog API key](https://app.datadoghq.com/account/settings#api).
+To send [Datadog deployment events](http://docs.datadoghq.com/guides/overview/#events) supply 
+your [Datadog API key](https://app.datadoghq.com/account/settings#api). Lighter will add Marathon 
+appid and canary group as Docker container labels in order for Datadog to tag collected metrics,
+[see: collect_labels_as_tags](https://github.com/DataDog/dd-agent/blob/master/conf.d/docker_daemon.yaml.example).
+
 
 *globals.yml*
 ```
@@ -456,42 +464,14 @@ datadog:
     - subsystem:example
 ```
 
-For deployments of Docker containers, Lighter will add Marathon appid as a Docker container label in order for Datadog to tag services, [see: collect_labels_as_tags](https://github.com/DataDog/dd-agent/blob/master/conf.d/docker_daemon.yaml.example)
- 
+*Datadog Puppet Config*
 ```
-{
-    "upgradeStrategy": {
-        "maximumOverCapacity": 0.0, 
-        "minimumHealthCapacity": 0.0
-    }, 
-    "mem": 200.0, 
-    "labels": {
-        "com.meltwater.lighter.checksum": "58c7dd73636b957fca251dde3c80b0a8"
-    }, 
-    "cpus": 1.0, 
-    "instances": 3, 
-    "container": {
-        "docker": {
-            "portMappings": [
-                {
-                    "containerPort": 8080, 
-                    "servicePort": 1234
-                }
-            ], 
-            "image": "meltwater/myservice:1.0.0", 
-            "network": "BRIDGE", 
-            "parameters": [
-                {
-                    "value": "com.meltwater.lighter.appid=/myproduct/myservice", 
-                    "key": "label"
-                }
-            ]
-        }, 
-        "type": "DOCKER"
-    },
-    "id": "/myproduct/myservice"
-}
-    
+datadog::docker:
+  docker_daemon:
+    instances:
+      - url: "unix://var/run/docker.sock"
+        new_tag_names: true
+        collect_labels_as_tags: ["com.meltwater.lighter.appid", "com.meltwater.lighter.canary.group"]
 ```
 
 ### Graphite
