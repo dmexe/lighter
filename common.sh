@@ -27,5 +27,5 @@ if [[ "$(uname -s)" == "Darwin" ]]; then
 
     export DYLD_FALLBACK_LIBRARY_PATH=/opt/local/lib
 
-    source ~/.venv/bin/activate
+    source ${PYENV_ROOT}/bin/activate
 fi
