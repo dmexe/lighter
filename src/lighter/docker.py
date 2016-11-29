@@ -4,11 +4,12 @@ import urllib2
 import logging
 import base64
 import json
+import boto3
 import lighter.util as util
 
 class ImageVariables(object):
     def __init__(self, wrappedResolver, document, image):
-        m = re.search('^(?:([\w\-]+[\.:].[\w\.\-:]+)/)?(?:([\w\.\-]+)/)?([\w\.\-/]+)(?::([\w\.\-/]+))?$', image)
+        m = re.search('^(?:([\w\-]+[\.:].[\w\.\-:]+)/)?(?:([\w\.\-]+)/)?([\w\.\-/]+)(?::([\w\.\-/]+))?(@\%\{lighter\.uniqueVersion\})?$', image)
         if not m:
             raise ValueError("Failed to parse Docker image coordinates '%s'" % image)
 
@@ -39,6 +40,7 @@ class ImageVariables(object):
 
         if name == 'lighter.uniqueVersion':
             return \
+                self._tryEcrRegistry() or \
                 self._tryRegistryV2('https://%s/v2/%s/manifests/%s') or \
                 self._tryRegistryV1('https://%s/v1/repositories/%s/tags/%s') or \
                 self._tryRegistryV2('http://%s/v2/%s/manifests/%s') or \
@@ -46,6 +48,30 @@ class ImageVariables(object):
                 self._fail('https://%s/v2/%s/manifests/%s')
 
         return self._wrappedResolver.pop(name)
+
+    def _tryEcrRegistry(self):
+        m = re.search("^(\d+).dkr.ecr.([a-z0-9\-]+).amazonaws.com$", str(self._registry))
+        if not m:
+            return None
+
+        account = m.group(1)
+        # region = m.group(2)
+
+        client = boto3.client('ecr')
+        described = client.describe_images(
+          registryId=account,
+          repositoryName=self._repository,
+          imageIds=[{
+            'imageTag': self._tag,
+          }],
+          filter={
+            'tagStatus': 'TAGGED'
+          }
+        )
+
+        tag = described['imageDetails'][0]['imageDigest']
+
+        return tag
 
     def _tryRegistryV1(self, url):
         """
